@@ -47,9 +47,10 @@ void footer();
 uint x, y;
 uint px = 1 * (2), py = 0;
 time_t SEED = time(NULL);
-time_t last_falling_time = clock();
-time_t last_melt_time = clock();
-time_t cmp_time = clock();
+time_t last_falling_time;
+time_t last_melt_time;
+time_t cmp_time;
+time_t lclock = clock();
 int snow_freq = 1;
 
 bool fallingflag = true;
@@ -75,8 +76,8 @@ struct snow {
 struct Map {
 	ll top = 0; // value of height on this line of snow
 	int melt = 2; // value of snow melted
-	struct Map* left = this;
-	struct Map* right = this;
+	struct Map* left;
+	struct Map* right;
 	time_t melt_time;
 	pair<snow*, snow*> line;
 	Map(pair<snow*, snow*> li) :line(li) {}
@@ -89,9 +90,7 @@ struct Map {
 				flow();
 			}
 		}
-		melt_time = clock();
-		left->melt_time = clock();
-		right->melt_time = clock();
+		melt_time = lclock;
 	}
 	void meltup() {
 		if (!(melt == 2 && top == 0)) {
@@ -102,7 +101,7 @@ struct Map {
 				left->flow();
 				right->flow();
 			}
-			melt_time = clock() - (DELAY * 15 / snow_freq / 6 * 2);
+			melt_time = lclock - (DELAY * 15 / snow_freq / 6 * 2);
 		}
 	}
 	void flow() {
@@ -179,14 +178,15 @@ int main() {
 	setup();
 
 	while (1) {
+		lclock = clock();
 		bool outputflag = false;
 		if (_kbhit() != 0) press(_getch());
-		if (cmp_time == clock()) continue; // wait for time change
+		if (cmp_time == lclock) continue; // wait for time change
 		if (pauseflag) { // if paused
-			last_falling_time = cmp_time - last_falling_time + clock(); // make time equal as last
-			for (uint i = 0; i < x / 2; i++) stacked[i]->melt_time = cmp_time - stacked[i]->melt_time + clock();
+			last_falling_time = cmp_time - last_falling_time + lclock; // make time equal as last
+			for (uint i = 0; i < x / 2; i++) stacked[i]->melt_time = cmp_time - stacked[i]->melt_time + lclock;
 		}
-		cmp_time = clock();
+		cmp_time = lclock;
 		if (cmp_time >= last_falling_time + DELAY) { // if time has passed
 			last_falling_time = cmp_time;
 			pushsnow(fallingflag);
@@ -206,12 +206,13 @@ int main() {
 			}
 			if (no_snow_flag && floorflag && !fallingflag) fallingflag = true;
 		}
-		if (outputflag) screen(false);
 		for (uint i = 0; i < x / 2; i++) { // check melt
 			if (cmp_time >= stacked[i]->melt_time + DELAY * 15 / snow_freq * ((x * 6 / 2 * (!no_snow_flag || fallingflag)) + 1)) {
 				stacked[i]->meltup();
+				outputflag = true;
 			}
 		}
+		if (outputflag) screen(false);
 	}
 }
 
@@ -239,12 +240,12 @@ void setup() {
 	stacked.clear();
 	falling.clear();
 	px = 1 * (2), py = 0;
-	last_falling_time = clock();
-	last_melt_time = clock();
-	cmp_time = clock();
+	last_falling_time = lclock;
+	last_melt_time = lclock;
+	cmp_time = lclock;
 	pauseflag = false;
 	if (snow_freq < 1) snow_freq = 1;
-	if (snow_freq > x / 2) snow_freq = x / 2;
+	if (snow_freq > x) snow_freq = x;
 	srand(SEED);
 	char cmd[256];
 	sprintf(cmd, "mode con: lines=%d cols=%d", y / 2 + 3, max(x * 2 / 2, 50) + 4);
@@ -326,7 +327,7 @@ void clear() { // fill black on console in range
 void press(char chr) { // catch key pressed
 	if (!pauseflag) {
 		if ((chr == '-' || chr == '_') && snow_freq > 1) snow_freq--;
-		if ((chr == '+' || chr == '=') && snow_freq < x / 2) snow_freq++;
+		if ((chr == '+' || chr == '=') && snow_freq < x) snow_freq++;
 		if (chr == 'c' || chr == 'C') {
 			if (fallingflag) fallingflag = false;
 			else fallingflag = true;
@@ -348,28 +349,20 @@ void press(char chr) { // catch key pressed
 void pushsnow(bool pushflag) { // make snow
 	vector<bool> pos(x, false);
 	if (pushflag) {
-		int loop = snow_freq;
-		while (loop--) {
-			pos[rand() % x] = true;
+		int cnt = 0;
+		for (int i = 0; i < x; i++) {
+			pos[i] = ((rand() % (x - i)) < snow_freq - cnt);
+			cnt += pos[i];
 		}
 	}
 	int h = (y - 1) / BIT; // get top of bitfield
-	for (uint i = 0; i < x; i++) { // push
-		bool val =
-			pos[i] &&
-			(0 == (falling[i].bit[h] & 1));
-		falling[i].push(val);
-		i++;
-		falling[i].push(
-			pos[i] &&
-			(0 == (falling[i].bit[h] & 1)));
-	}
+	for (uint i = 0; i < x; i++) falling[i].push(pos[i]); // push
 }
 void screen(bool reload) {
 	int half[3] = { WHITE,LIGHTGRAY,BLACK };
 	int full[3] = { LIGHTGRAY,GRAY,GRAY };
-	string outputs[6] = {
-		"__", "▒ ", " ", "'", ".", "■"
+	string outputs[7] = {
+		"__", "▒ ", " ", "'", ".",":", "■"
 	};
 
 	for (uint i = 0; i < x; i += 2) {
@@ -377,26 +370,27 @@ void screen(bool reload) {
 			ll top = stacked[i / 2]->top;
 			int h = (y - 1) / BIT - (j / BIT);
 			int pos = j % BIT;
-			if (!reload && h != 0 && falling[i].bit[h] >> pos == 0 && falling[i + 1].bit[h] >> pos == 0 &&
+			if (!(stacked[i / 2]->melt_time == lclock - (DELAY * 15 / snow_freq / 6 * 2) && y - ((j / BIT + 1) * BIT) - 2 < top) &&
+				!reload && h != 0 && falling[i].bit[h] >> pos == 0 && falling[i + 1].bit[h] >> pos == 0 &&
 				!(top >= y - ((j / BIT + 1) * BIT) - 2) && !(falling[i].bit[h - 1] & 1) && !(falling[i + 1].bit[h - 1] & 1)) { // no bit on bitfield, skip
 				j = (j / BIT + 1) * BIT - 2;
 				continue;
 			}
 			if (top == y - (ll)j - 2) { // snow level 1
-				gotoxy(px + i, py + j / 2);
 				textcolor(half[stacked[i / 2]->melt], (half[stacked[i / 2]->melt] == WHITE) ? GRAY : BLACK);
+				gotoxy(px + i, py + j / 2);
 				std::cout << outputs[0];
 			}
 			else if (top == y - (ll)j - 1) { // snow level 2
-				gotoxy(px + i, py + j / 2);
 				textcolor((stacked[i / 2]->melt == 2) ? LIGHTGRAY : WHITE, full[stacked[i / 2]->melt]);
+				gotoxy(px + i, py + j / 2);
 				std::cout << outputs[1];
 			}
 			else if (top > y - (ll)j - 1) { // full snow
-				gotoxy(px + i, py + j / 2);
 				textcolor(WHITE, WHITE);
+				gotoxy(px + i, py + j / 2);
 				std::cout << outputs[2] << outputs[2];
-				if (!reload && top > y - (ll)j) break;
+				if (!reload && top > y - (ll)j + 1) break;
 			}
 			else {
 				int val = 0;
@@ -407,19 +401,21 @@ void screen(bool reload) {
 				textcolor(WHITE, BLACK);
 				if (val & 3) {
 					gotoxy(px + i, py + j / 2);
-					std::cout << (((val & 3) == 1) ? outputs[3] : outputs[4]); // left
+					std::cout << (((val & 3) == 1) ? outputs[3] : (((val & 3) == 2) ? outputs[4] : outputs[5])); // left
 				}
 				else if ((h > 0 && pos == BIT - 2 && falling[i].bit[h - 1] & 1) || // next bitfield
-					falling[i].bit[h] & (1LL << (pos + 2)) || top >= y - ((ll)j + 2) - 2) { // when snow is under it
+					falling[i].bit[h] & (1LL << (pos + 2)) || top >= y - ((ll)j + 2) - 2 ||
+					(stacked[i / 2]->melt_time == lclock - (DELAY * 15 / snow_freq / 6 * 2) && y - (ll)j - 2 < top)) { // when snow is under it
 					gotoxy(px + i, py + j / 2);
 					std::cout << outputs[2];
 				}
 				if (val & 12) {
 					gotoxy(px + i + 1, py + j / 2);
-					std::cout << (((val & 12) == 4) ? outputs[3] : outputs[4]); // right
+					std::cout << (((val & 12) == 4) ? outputs[3] : (((val & 12) == 8) ? outputs[4] : outputs[5])); // right
 				}
 				else if ((h > 0 && pos == BIT - 2 && falling[i + 1].bit[h - 1] & 1) ||  // next bitfield
-					falling[i + 1].bit[h] & (1LL << (pos + 2)) || top >= y - ((ll)j + 2) - 2) { // when snow is under it
+					falling[i + 1].bit[h] & (1LL << (pos + 2)) || top >= y - ((ll)j + 2) - 2 ||
+					(stacked[i / 2]->melt_time == lclock - (DELAY * 15 / snow_freq / 6 * 2) && y - (ll)j - 2 < top)) { // when snow is under it
 					gotoxy(px + i + 1, py + j / 2);
 					std::cout << outputs[2];
 				}
@@ -427,25 +423,28 @@ void screen(bool reload) {
 		}
 	}
 
-	gotoxy(px, py + y / 2);
 	textcolor(WHITE, BLACK);
-	for (uint i = 0; i < x; i += 2) std::cout << outputs[5]; // underline
+	for (uint i = 0; i < x; i += 2) {
+		gotoxy(px + i, py + y / 2);
+		std::cout << outputs[6]; // underline
+	}
 	for (uint i = 0; i < y / 2 + 1; i++) { // sideline
 		gotoxy(px - 2, i + py);
-		std::cout << outputs[5];
+		std::cout << outputs[6];
 		gotoxy(px + x, i + py);
-		std::cout << outputs[5];
+		std::cout << outputs[6];
 	}
 }
 
 void footer() {
+	textcolor(WHITE, BLACK);
 	if (pauseflag) {
-		gotoxy(0, py + y / 2 + 1);
 		textcolor(WHITE, RED);
+		gotoxy(0, py + y / 2 + 1);
 		std::cout << "Paused";
 
-		textcolor(WHITE, BLACK);
 		gotoxy(6, py + y / 2 + 1);
+		textcolor(WHITE, BLACK);
 		for (int i = 6; i < 50; i++) std::cout << " ";
 		gotoxy(0, py + y / 2 + 2);
 		for (int i = 0; i < 50; i++) std::cout << " ";
