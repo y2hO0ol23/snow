@@ -1,6 +1,6 @@
 # input
 
-input style : [length] [width] <snow freq> <seed>
+input style : [length] [width] ＜snow freq＞ ＜seed＞
 
 length and width is size of box.
   
