@@ -15,4 +15,4 @@ press -, + to change 'snow freq'
   
 press c to stop or start snowing
 
-press r to reset console size
+press r to move on window of input
