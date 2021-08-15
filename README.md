@@ -10,7 +10,5 @@ seed is a pattern of snow falling(if seed and 'snow time' is same falls on same 
 
 
 press space to stop or start program
-  
 press -, + to change 'snow time'
-  
 press c to stop or start snowing
