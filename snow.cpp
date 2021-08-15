@@ -50,7 +50,7 @@ time_t SEED = time(NULL);
 time_t last_falling_time = clock();
 time_t last_melt_time = clock();
 time_t cmp_time = clock();
-int snow_on_tick = 1;
+int snow_freq = 1;
 
 bool fallingflag = true;
 bool pauseflag = false;
@@ -102,7 +102,7 @@ struct Map {
 				left->flow();
 				right->flow();
 			}
-			melt_time = clock() - (DELAY * 15 / snow_on_tick / 6 * 2);
+			melt_time = clock() - (DELAY * 15 / snow_freq / 6 * 2);
 		}
 	}
 	void flow() {
@@ -208,7 +208,7 @@ int main() {
 		}
 		if (outputflag) screen(false);
 		for (uint i = 0; i < x / 2; i++) { // check melt
-			if (cmp_time >= stacked[i]->melt_time + DELAY * 15 / snow_on_tick * ((x * 6 / 2 * (!no_snow_flag || fallingflag)) + 1)) {
+			if (cmp_time >= stacked[i]->melt_time + DELAY * 15 / snow_freq * ((x * 6 / 2 * (!no_snow_flag || fallingflag)) + 1)) {
 				stacked[i]->meltup();
 			}
 		}
@@ -222,18 +222,20 @@ void setup() {
 	cin.getline(t, 1000);
 	if (inp(t)) { // change string, if input style is not correct, call input again
 		system("cls");
-		std::cout << "Style : [length] [width] <seed>\n";
+		std::cout << "Style : [length] [width] <snow freq> <seed>\n";
 		setup();
 		return;
 	}
 	// if value is under than 2, has error so call input again
-	if (min(x, y) < 4) { // in inp() function multiplied 2 so compare with 4
-		std::cout << "Minimum value : 2\n";
+	if (min(x, y) == 0) {
+		std::cout << "Minimum value : 1\n";
 		setup();
 		return;
 	}
 
 	// settings //
+	x *= 2;
+	y *= 2;
 	stacked.clear();
 	falling.clear();
 	px = 1 * (2), py = 0;
@@ -241,7 +243,8 @@ void setup() {
 	last_melt_time = clock();
 	cmp_time = clock();
 	pauseflag = false;
-	snow_on_tick = 1;
+	if (snow_freq < 1) snow_freq = 1;
+	if (snow_freq > x / 2) snow_freq = x / 2;
 	srand(SEED);
 	char cmd[256];
 	sprintf(cmd, "mode con: lines=%d cols=%d", y / 2 + 3, max(x * 2 / 2, 50) + 4);
@@ -257,7 +260,7 @@ void setup() {
 
 	stacked[0]->left = stacked[0];
 	for (uint i = 0; i < x / 2 - 1; i++) stacked[i]->link_to_right(stacked[i + 1]); // connect to left and right (to flow near)
-	stacked[x / 2 - 1]->right = stacked[x / 2 - 2];
+	stacked[x / 2 - 1]->right = stacked[x / 2 - 1];
 
 	clear();
 	screen(true);
@@ -283,8 +286,18 @@ bool inp(char* t) { // change string from input to numbers
 		x += t[pivot] - '0';
 		pivot++;
 	}
-	x *= 2;
-	y *= 2;
+	while (pivot < len && t[pivot] == ' ') pivot++;
+	if (pivot >= len) return 0;
+	snow_freq = 0;
+	while (pivot < len && t[pivot] != ' ') {
+		snow_freq *= 10;
+		if (t[pivot] < '0' || '9' < t[pivot]) {
+			x = -1;
+			return 1;
+		}
+		snow_freq += t[pivot] - '0';
+		pivot++;
+	}
 	while (pivot < len && t[pivot] == ' ') pivot++;
 	if (pivot >= len) return 0;
 	SEED = 0;
@@ -312,8 +325,8 @@ void clear() { // fill black on console in range
 }
 void press(char chr) { // catch key pressed
 	if (!pauseflag) {
-		if ((chr == '-' || chr == '_') && snow_on_tick > 1) snow_on_tick--;
-		if ((chr == '+' || chr == '=') && snow_on_tick < x / 2) snow_on_tick++;
+		if ((chr == '-' || chr == '_') && snow_freq > 1) snow_freq--;
+		if ((chr == '+' || chr == '=') && snow_freq < x / 2) snow_freq++;
 		if (chr == 'c' || chr == 'C') {
 			if (fallingflag) fallingflag = false;
 			else fallingflag = true;
@@ -335,7 +348,7 @@ void press(char chr) { // catch key pressed
 void pushsnow(bool pushflag) { // make snow
 	vector<bool> pos(x, false);
 	if (pushflag) {
-		int loop = snow_on_tick;
+		int loop = snow_freq;
 		while (loop--) {
 			pos[rand() % x] = true;
 		}
@@ -344,14 +357,12 @@ void pushsnow(bool pushflag) { // make snow
 	for (uint i = 0; i < x; i++) { // push
 		bool val =
 			pos[i] &&
-			(0 == (falling[i].bit[h] & 1)) &&
-			(0 == (falling[i + 1].bit[h] & 1));
+			(0 == (falling[i].bit[h] & 1));
 		falling[i].push(val);
 		i++;
 		falling[i].push(
 			pos[i] &&
-			(0 == (falling[i].bit[h] & 1)) &&
-			(0 == val));
+			(0 == (falling[i].bit[h] & 1)));
 	}
 }
 void screen(bool reload) {
@@ -443,10 +454,10 @@ void footer() {
 		gotoxy(0, py + y / 2 + 1);
 		std::cout << "Size : " << y / 2 << ", " << x / 2;
 
-		gotoxy(40, py + y / 2 + 1);
-		for (int i = 40; i < 50; i++) std::cout << " ";
+		gotoxy(37, py + y / 2 + 1);
+		for (int i = 37; i < 50; i++) std::cout << " ";
 		gotoxy(25, py + y / 2 + 1);
-		std::cout << "Snow on tick : " << snow_on_tick;
+		std::cout << "Snow freq : " << snow_freq;
 
 		gotoxy(0, py + y / 2 + 2);
 		std::cout << "Seed : " << SEED;
