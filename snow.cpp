@@ -13,8 +13,6 @@
 typedef long long int ll;
 typedef unsigned int uint;
 
-using namespace std;
-
 #define BLACK 0
 #define RED 4
 #define LIGHTGRAY 7
@@ -41,7 +39,10 @@ void clear();
 void press(char chr);
 void pushsnow(bool pushflag);
 void screen(bool reload);
+
 void footer();
+
+void set_console(int fy, int fx);
 
 #define DELAY 250
 uint x, y;
@@ -59,7 +60,7 @@ bool no_snow_flag = true;
 
 #define BIT 60
 struct snow {
-	vector<ll> bit;
+	std::vector<ll> bit;
 	void push(bool val) {
 		bit[0] <<= 1;
 		bit[0] &= (1LL << ((y - 1) % BIT + 1)) - 1;
@@ -79,21 +80,19 @@ struct Map {
 	struct Map* left;
 	struct Map* right;
 	time_t melt_time;
-	pair<snow*, snow*> line;
-	Map(pair<snow*, snow*> li) :line(li) {}
+	std::pair<snow*, snow*> line;
+	Map(std::pair<snow*, snow*> li) :line(li) {}
 	void stackup() {
-		melt--;
+		if (top < y) melt--;
 		if (melt < 0) {
-			if (top < y) {
-				melt = 2;
-				top++;
-				flow();
-			}
+			melt = 2;
+			top++;
+			flow();
 		}
 		melt_time = lclock;
 	}
 	void meltup() {
-		if (!(melt == 2 && top == 0)) {
+		if (!this->floor()) {
 			melt++;
 			if (melt == 3) {
 				melt = 0;
@@ -103,6 +102,9 @@ struct Map {
 			}
 			melt_time = lclock - (DELAY * 15 / snow_freq / 6 * 2);
 		}
+	}
+	void set_melt_ratio(int to){
+		melt_time = lclock + (melt_time - lclock) / snow_freq * to;
 	}
 	void flow() {
 		if (top > left->top + 2 && top > right->top + 2) { // if both of snows can flow down
@@ -136,44 +138,44 @@ struct Map {
 		check_stacked(line.second);
 	}
 	void check_stacked(struct snow* li) {
-		ll h = (top + BIT - ((y - 1) % BIT) - 1) / BIT;
-		if (h >= (y - 1) / BIT + 1) {
+		ll h = (top + BIT - ((y - 1) % BIT + 1)) / BIT;
+		for (uint i = 0; i < h; i++) { // get bits under this bitfield
+			ll cmp = li->bit[i];
+			while (cmp) {
+				li->bit[i] ^= cmp & -cmp;
+				cmp ^= cmp & -cmp;
+				stackup();
+			}
+		}
+		if (!(top < y)) {
 			fallingflag = false;
 			return;
 		}
-		ll pos = (top <= (y - 1) % BIT) ? top : (top - ((y - 1) % BIT)) % BIT;
-		int size = (top <= (y - 1) % BIT) ? (y - 1) % BIT : BIT;
+		ll pos = (h == 0) ? top : (top - ((y - 1) % BIT + 1)) % BIT;
+		int size = (h == 0) ? (y - 1) % BIT : BIT;
 		ll cmp = (((li->bit[h] << (ll)(pos - (pos % 2) + 1)) & ((1LL << size) - 1)) >> (pos - (pos % 2) + 1)) ^ li->bit[h]; // get bits on this bitfield
 		while (cmp) {
 			li->bit[h] ^= cmp & -cmp;
 			cmp ^= cmp & -cmp;
 			stackup();
 		}
-		for (uint i = 0; i < h; i++) { // get bits under this bitfield
-			cmp = li->bit[i];
-			while (cmp) {
-				li->bit[h] ^= cmp & -cmp;
-				cmp ^= cmp & -cmp;
-				stackup();
-			}
-		}
 	}
 
-	bool none() {
-		return !top && melt == 2;
+	bool floor() {
+		return (top == 0 && melt == 2);
 	}
 };
 
-vector<Map*> stacked;
-vector<snow> falling;
+std::vector<Map*> stacked;
+std::vector<snow> falling;
 
 int main() {
-	ios_base::sync_with_stdio(false);
-	cin.tie(NULL);
-	cout.tie(NULL);
+	std::ios_base::sync_with_stdio(false);
+	std::cin.tie(NULL);
+	std::cout.tie(NULL);
 
-	system("title snow");
-	system("mode con: lines=2 cols=50");
+	std::system("title snow");
+	set_console(2, 50);
 
 	setup();
 
@@ -188,28 +190,28 @@ int main() {
 		}
 		cmp_time = lclock;
 		if (cmp_time >= last_falling_time + DELAY) { // if time has passed
+			outputflag = true;
 			last_falling_time = cmp_time;
 			pushsnow(fallingflag);
-			for (uint i = 0; i < x / 2; i++) stacked[i]->check_stacked();
-			outputflag = true;
 
 			no_snow_flag = true; // check snow is falling
 			bool floorflag = true;
-			for (uint i = 0; i < x; i++) {
-				if (no_snow_flag && !fallingflag) {
-					int len = falling[i].bit.size();
-					for (int k = 0; k < len && no_snow_flag; k++) {
-						no_snow_flag = !falling[i].bit[k];
-					}
+			for (uint i = 0; i < x / 2; i++) {
+				stacked[i]->check_stacked();
+				if (floorflag) floorflag = stacked[i]->floor();
+			}
+			for (uint i = 0; i < x && no_snow_flag; i++) {
+				int len = falling[i].bit.size();
+				for (int j = 0; j < len; j++) {
+					if (no_snow_flag) no_snow_flag = (falling[i].bit[j] == 0);
 				}
-				if (floorflag) floorflag = stacked[i / 2]->none();
 			}
 			if (no_snow_flag && floorflag && !fallingflag) fallingflag = true;
 		}
 		for (uint i = 0; i < x / 2; i++) { // check melt
-			if (cmp_time >= stacked[i]->melt_time + DELAY * 15 / snow_freq * ((x * 6 / 2 * (!no_snow_flag || fallingflag)) + 1)) {
-				stacked[i]->meltup();
+			if (cmp_time >= stacked[i]->melt_time + DELAY * 15 / snow_freq * ((x * 3 / 2 * (!no_snow_flag || fallingflag)) + 1)) {
 				outputflag = true;
+				stacked[i]->meltup();
 			}
 		}
 		if (outputflag) screen(false);
@@ -217,10 +219,11 @@ int main() {
 }
 
 void setup() {
-	Remove_cursor();
 	std::cout << "input // length width : ";
 	char t[1000];
-	cin.getline(t, 1000);
+	std::cin.getline(t, 1000);
+	SEED = time(NULL);
+	snow_freq = 1;
 	if (inp(t)) { // change string, if input style is not correct, call input again
 		system("cls");
 		std::cout << "Style : [length] [width] <snow freq> <seed>\n";
@@ -247,10 +250,8 @@ void setup() {
 	if (snow_freq < 1) snow_freq = 1;
 	if (snow_freq > x) snow_freq = x;
 	srand(SEED);
-	char cmd[256];
-	sprintf(cmd, "mode con: lines=%d cols=%d", y / 2 + 3, max(x * 2 / 2, 50) + 4);
+	set_console(y / 2 + 3, max(x * 2 / 2, 50) + 4);
 	if (max(x, 50) != x) px = 26 - (x / 2);
-	system(cmd);
 	system("cls");
 	// settings //
 
@@ -326,11 +327,20 @@ void clear() { // fill black on console in range
 }
 void press(char chr) { // catch key pressed
 	if (!pauseflag) {
-		if ((chr == '-' || chr == '_') && snow_freq > 1) snow_freq--;
-		if ((chr == '+' || chr == '=') && snow_freq < x) snow_freq++;
+		if ((chr == '-' || chr == '_') && snow_freq > 1) {
+			for (int i = 0; i < x / 2; i++) stacked[i]->set_melt_ratio(snow_freq - 1);
+			snow_freq--;
+		}
+		if ((chr == '+' || chr == '=') && snow_freq < x) {
+			for (int i = 0; i < x / 2; i++) stacked[i]->set_melt_ratio(snow_freq - 1);
+			snow_freq++;
+		}
 		if (chr == 'c' || chr == 'C') {
 			if (fallingflag) fallingflag = false;
 			else fallingflag = true;
+		}
+		if (chr == 'r' || chr == 'R') {
+			set_console(y / 2 + 3, max(x * 2 / 2, 50) + 4);
 		}
 		if (chr == 27) {
 			main();
@@ -344,10 +354,9 @@ void press(char chr) { // catch key pressed
 		screen(false);
 		footer();
 	}
-	textcolor(WHITE, BLACK);
 }
 void pushsnow(bool pushflag) { // make snow
-	vector<bool> pos(x, false);
+	std::vector<bool> pos(x, false);
 	if (pushflag) {
 		int cnt = 0;
 		for (int i = 0; i < x; i++) {
@@ -361,7 +370,7 @@ void pushsnow(bool pushflag) { // make snow
 void screen(bool reload) {
 	int half[3] = { WHITE,LIGHTGRAY,BLACK };
 	int full[3] = { LIGHTGRAY,GRAY,GRAY };
-	string outputs[7] = {
+	std::string outputs[7] = {
 		"__", "▒ ", " ", "'", ".",":", "■"
 	};
 
@@ -370,27 +379,33 @@ void screen(bool reload) {
 			ll top = stacked[i / 2]->top;
 			int h = (y - 1) / BIT - (j / BIT);
 			int pos = j % BIT;
-			if (!(stacked[i / 2]->melt_time == lclock - (DELAY * 15 / snow_freq / 6 * 2) && y - ((j / BIT + 1) * BIT) - 2 < top) &&
-				!reload && h != 0 && falling[i].bit[h] >> pos == 0 && falling[i + 1].bit[h] >> pos == 0 &&
-				!(top >= y - ((j / BIT + 1) * BIT) - 2) && !(falling[i].bit[h - 1] & 1) && !(falling[i + 1].bit[h - 1] & 1)) { // no bit on bitfield, skip
-				j = (j / BIT + 1) * BIT - 2;
-				continue;
+			if (!reload && !(falling[i].bit[h] >> pos) && !(falling[i + 1].bit[h] >> pos) && top <= (ll)y - ((j / BIT + 1) * BIT) - 4) { // no bit on bitfield, skip
+				if (h == 0) break;
+
+				if (!(falling[i].bit[h - 1] & 1) && !(falling[i + 1].bit[h - 1] & 1)) {
+					j = (j / BIT + 1) * BIT - 2;
+					continue;
+				}
+				else if (j != (j / BIT + 1) * BIT - 2) {
+					j = (j / BIT + 1) * BIT - 4;
+					continue;
+				}
 			}
-			if (top == y - (ll)j - 2) { // snow level 1
+			if (top == y - j - 2) { // snow level 1
 				textcolor(half[stacked[i / 2]->melt], (half[stacked[i / 2]->melt] == WHITE) ? GRAY : BLACK);
 				gotoxy(px + i, py + j / 2);
 				std::cout << outputs[0];
 			}
-			else if (top == y - (ll)j - 1) { // snow level 2
+			else if (top == y - j - 1) { // snow level 2
 				textcolor((stacked[i / 2]->melt == 2) ? LIGHTGRAY : WHITE, full[stacked[i / 2]->melt]);
 				gotoxy(px + i, py + j / 2);
 				std::cout << outputs[1];
 			}
-			else if (top > y - (ll)j - 1) { // full snow
+			else if (top >= y - j) { // full snow
 				textcolor(WHITE, WHITE);
 				gotoxy(px + i, py + j / 2);
-				std::cout << outputs[2] << outputs[2];
-				if (!reload && top > y - (ll)j + 1) break;
+				std::cout << outputs[2] << outputs[2]; 
+				if (!reload && top > y - j + 3) break;
 			}
 			else {
 				int val = 0;
@@ -404,8 +419,9 @@ void screen(bool reload) {
 					std::cout << (((val & 3) == 1) ? outputs[3] : (((val & 3) == 2) ? outputs[4] : outputs[5])); // left
 				}
 				else if ((h > 0 && pos == BIT - 2 && falling[i].bit[h - 1] & 1) || // next bitfield
-					falling[i].bit[h] & (1LL << (pos + 2)) || top >= y - ((ll)j + 2) - 2 ||
-					(stacked[i / 2]->melt_time == lclock - (DELAY * 15 / snow_freq / 6 * 2) && y - (ll)j - 2 < top)) { // when snow is under it
+					(falling[i].bit[h] & (1LL << (pos + 2))) || top >= (ll)y - j - 4 ||
+					(stacked[i / 2]->melt_time == lclock - (DELAY * 15 / snow_freq / 6 * 2) && y - j - 1 < top)) {
+					
 					gotoxy(px + i, py + j / 2);
 					std::cout << outputs[2];
 				}
@@ -414,8 +430,8 @@ void screen(bool reload) {
 					std::cout << (((val & 12) == 4) ? outputs[3] : (((val & 12) == 8) ? outputs[4] : outputs[5])); // right
 				}
 				else if ((h > 0 && pos == BIT - 2 && falling[i + 1].bit[h - 1] & 1) ||  // next bitfield
-					falling[i + 1].bit[h] & (1LL << (pos + 2)) || top >= y - ((ll)j + 2) - 2 ||
-					(stacked[i / 2]->melt_time == lclock - (DELAY * 15 / snow_freq / 6 * 2) && y - (ll)j - 2 < top)) { // when snow is under it
+					(falling[i + 1].bit[h] & (1LL << (pos + 2))) || top >= (ll)y - j - 4 ||
+					(stacked[i / 2]->melt_time == lclock - (DELAY * 15 / snow_freq / 6 * 2) && y - j - 1 < top)) {
 					gotoxy(px + i + 1, py + j / 2);
 					std::cout << outputs[2];
 				}
@@ -461,4 +477,11 @@ void footer() {
 		gotoxy(0, py + y / 2 + 2);
 		std::cout << "Seed : " << SEED;
 	}
+}
+
+void set_console(int fy, int fx) {
+	Remove_cursor();
+	char cmd[256];
+	sprintf(cmd, "mode con: lines=%d cols=%d", fy, fx);
+	system(cmd);
 }
