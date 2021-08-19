@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <iostream>
 #include <ctime>
 #include <Windows.h>
@@ -341,6 +343,7 @@ void press(char chr) { // catch key pressed
 		}
 		if (chr == 'r' || chr == 'R') {
 			set_console(y / 2 + 3, max(x * 2 / 2, 50) + 4);
+			screen(true);
 		}
 		if (chr == 27) {
 			main();
@@ -371,7 +374,7 @@ void screen(bool reload) {
 	int half[3] = { WHITE,LIGHTGRAY,BLACK };
 	int full[3] = { LIGHTGRAY,GRAY,GRAY };
 	std::string outputs[7] = {
-		"__", "▒ ", " ", "'", ".",":", "■"
+		"__", "▒ ", " ", "'", ".",":"
 	};
 
 	for (uint i = 0; i < x; i += 2) {
@@ -415,8 +418,16 @@ void screen(bool reload) {
 				val += (bool)(falling[i + 1].bit[h] & (1LL << (pos + 1))) << 3; // right bot
 				textcolor(WHITE, BLACK);
 				if (val & 3) {
-					gotoxy(px + i, py + j / 2);
-					std::cout << (((val & 3) == 1) ? outputs[3] : (((val & 3) == 2) ? outputs[4] : outputs[5])); // left
+					if ((val & 3) == 3) {
+						if ((h > 0 && pos == BIT - 2 && falling[i].bit[h - 1] & 1) || (falling[i].bit[h] & (1LL << (pos + 2)))) {
+							gotoxy(px + i, py + j / 2);
+							std::cout << outputs[5];
+						}
+					}
+					else {
+						gotoxy(px + i, py + j / 2);
+						std::cout << ((val & 1) ? outputs[3] : outputs[4]);
+					}
 				}
 				else if ((h > 0 && pos == BIT - 2 && falling[i].bit[h - 1] & 1) || // next bitfield
 					(falling[i].bit[h] & (1LL << (pos + 2))) || top >= (ll)y - j - 4 ||
@@ -426,8 +437,16 @@ void screen(bool reload) {
 					std::cout << outputs[2];
 				}
 				if (val & 12) {
-					gotoxy(px + i + 1, py + j / 2);
-					std::cout << (((val & 12) == 4) ? outputs[3] : (((val & 12) == 8) ? outputs[4] : outputs[5])); // right
+					if ((val & 12) == 12) {
+						if ((h > 0 && pos == BIT - 2 && !(falling[i + 1].bit[h - 1] & 1)) || !(falling[i + 1].bit[h] & (1LL << (pos + 2)))) {
+							gotoxy(px + i + 1, py + j / 2);
+							std::cout << outputs[5];
+						}
+					}
+					else {
+						gotoxy(px + i + 1, py + j / 2);
+						std::cout << ((val & 4) ? outputs[3] : outputs[4]);
+					}
 				}
 				else if ((h > 0 && pos == BIT - 2 && falling[i + 1].bit[h - 1] & 1) ||  // next bitfield
 					(falling[i + 1].bit[h] & (1LL << (pos + 2))) || top >= (ll)y - j - 4 ||
@@ -439,16 +458,16 @@ void screen(bool reload) {
 		}
 	}
 
-	textcolor(WHITE, BLACK);
+	textcolor(GRAY, WHITE);
 	for (uint i = 0; i < x; i += 2) {
-		gotoxy(px + i, py + y / 2);
-		std::cout << outputs[6]; // underline
+		gotoxy(px + i, py + (y / 2));
+		std::cout << outputs[2] << outputs[2]; // underline
 	}
 	for (uint i = 0; i < y / 2 + 1; i++) { // sideline
 		gotoxy(px - 2, i + py);
-		std::cout << outputs[6];
+		std::cout << outputs[2] << outputs[2];
 		gotoxy(px + x, i + py);
-		std::cout << outputs[6];
+		std::cout << outputs[2] << outputs[2];
 	}
 }
 
