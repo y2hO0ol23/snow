@@ -503,4 +503,12 @@ void set_console(int fy, int fx) {
 	char cmd[256];
 	sprintf(cmd, "mode con: lines=%d cols=%d", fy, fx);
 	system(cmd);
+
+	textcolor(WHITE, BLACK);
+	gotoxy(0, 0);
+	for (int i = 0; i < fy; i++) {
+		for (int j = 0; j < fx; j++) printf(" ");
+		printf("\n");
+	}
+	gotoxy(0, 0);
 }
